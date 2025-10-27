@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+  <title>Kitchen Master Inventory</title>
+  <style>
+    :root{
+      --bg:#0b0c0f;
+      --card:#151821;
+      --muted:#9aa3b2;
+      --text:#e6e9ef;
+      --accent:#7dd3fc;
+      --ok:#86efac;
+      --warn:#fde68a;
+      --month:#93c5fd;
+      --quarter:#c7d2fe;
+      --line:#232733;
+      --chip:#1f2430;
+
+      --header-h:122px;                 /* scroll offset under sticky header */
+      --footer-h:96px;
+      --footer-safe:calc(var(--footer-h) + env(safe-area-inset-bottom, 0px));
+    }
+
+    *{box-sizing:border-box;font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif}
+    html,body{margin:0;background:var(--bg);color:var(--text);max-width:100%;overflow-x:hidden}
+    html{scroll-padding-top:var(--header-h);scroll-padding-bottom:var(--footer-safe);}
+
+    /* Sticky header */
+    header{position:sticky;top:0;background:linear-gradient(180deg,rgba(11,12,15,.95),rgba(11,12,15,.85));backdrop-filter:saturate(180%) blur(10px);z-index:1000;border-bottom:1px solid var(--line)}
+    .wrap{max-width:980px;margin:0 auto;padding:16px}
+    h1{margin:0;font-size:20px;letter-spacing:.2px}
+
+    .toolbar{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+    .pill{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;border:1px solid var(--line);background:var(--chip);font-size:12px;color:var(--muted);user-select:none}
+    .pill.btn{cursor:pointer}
+    .pill.btn.active{color:#0b0c0f;background:var(--accent);border-color:var(--accent);font-weight:700}
+
+    /* Keep content above the sticky footer */
+    main{padding-top:var(--header-h);padding-bottom:calc(var(--footer-safe) + 120px);}
+    .bottom-spacer{height:calc(var(--footer-safe) + 40px);}
+
+    section{margin:14px auto;border:1px solid var(--line);border-radius:16px;overflow:hidden;background:var(--card)}
+    section>header{position:relative;background:transparent;border:0;cursor:pointer}
+    section h2{font-size:16px;margin:0;padding:14px 16px}
+    section.collapsed h2{opacity:.85}
+    section.collapsed .group{display:none}
+
+    /* All-done visual (green when 100% complete OR when AC actionables are cleared) */
+    section.section-all-done{border-color:rgba(134,239,172,.8); box-shadow:0 0 0 2px rgba(134,239,172,.15) inset}
+    section.section-all-done>header h2{color:var(--ok)}
+
+    .group{padding:0 8px 10px}
+
+    .freqBlock{margin:0}
+    .freq{display:flex;align-items:center;gap:8px;padding:6px 10px;color:var(--muted);font-size:12px;text-transform:uppercase}
+    .freq .dot{width:8px;height:8px;border-radius:999px;display:inline-block}
+    .f-weekly .dot{background:var(--ok)}
+    .f-biweekly .dot{background:var(--warn)}
+    .f-monthly .dot{background:var(--month)}
+    .f-quarterly .dot{background:var(--quarter)}
+
+    /* Item layout */
+    .item{display:grid;grid-template-columns:1fr auto;gap:8px;border-top:1px solid var(--line);padding:10px}
+    .item:first-of-type{border-top:1px solid var(--line)}
+    .title{display:flex;flex-direction:column;gap:4px}
+    .title .name{font-weight:700}
+
+    .title .meta{display:flex;gap:8px;flex-wrap:wrap;overflow-x:visible;scrollbar-width:none}
+    .title .meta::-webkit-scrollbar{display:none}
+    .chip{font-size:11px;color:var(--muted);background:var(--chip);padding:2px 8px;border-radius:999px;border:1px solid var(--line);white-space:normal;overflow-wrap:anywhere;hyphens:auto}
+
+    /* High-contrast Buy chip */
+    .chip.buychip{
+      background:rgba(34,197,94,0.18);
+      color:#d6ffe5;
+      border-color:rgba(34,197,94,0.55);
+      font-weight:800;
+      padding:3px 9px;
+      letter-spacing:.2px;
+    }
+
+    /* Controls */
+    .controls{display:flex;gap:8px;align-items:center;position:relative;z-index:2;flex-wrap:wrap}
+    .controls label{font-size:12px;color:var(--muted)}
+    .controls input[type=number]{width:64px;background:#0f1218;border:1px solid var(--line);color:#e6e9ef;padding:8px;border-radius:10px}
+    .controls .done{display:flex;align-items:center;gap:6px;border:1px solid var(--line);padding:8px 10px;border-radius:10px;background:#0f1218}
+    .controls .done input{transform:scale(1.05)}
+
+    /* Completed row visual */
+    .item.is-done{opacity:.55}
+    .item.is-done .title .name{text-decoration:line-through;text-decoration-thickness:2px}
+
+    /* Filter utility */
+    .hidden-by-filter{display:none !important}
+
+    /* Sticky footer */
+    footer{position:fixed;bottom:0;left:0;right:0;background:linear-gradient(0deg,rgba(11,12,15,.98),rgba(11,12,15,.85));border-top:1px solid var(--line);padding:10px 10px calc(10px + env(safe-area-inset-bottom, 0px));z-index:1000}
+    .footerbar{display:flex;gap:8px;justify-content:space-between;flex-wrap:wrap;align-items:center}
+    .footerbar button{flex:1 1 140px;appearance:none;border:1px solid var(--line);background:var(--card);color:var(--text);padding:10px 12px;border-radius:10px;font-weight:600}
+    .footerbar button:hover{border-color:#2d3343}
+
+    @media (max-width:540px){
+      .wrap{padding:12px}
+      h1{font-size:18px}
+      .toolbar{gap:6px;margin-top:8px}
+      .pill{padding:3px 8px;font-size:11px}
+
+      section{margin:10px auto;border-radius:14px}
+      .group{padding:0 8px 10px}
+      .freq{padding:6px 8px;font-size:11px}
+
+      .item{padding:10px 8px;gap:8px;grid-template-columns:1fr !important}
+      .title .name{font-size:16px;line-height:1.25}
+      .title .meta{gap:6px}
+      .chip{font-size:10px;padding:2px 6px}
+      .chip.buychip{font-size:11px;padding:3px 8px}
+
+      .controls{gap:6px;align-items:center}
+      .controls label{font-size:11px}
+      .controls input[type=number]{width:56px;padding:6px}
+
+      footer{padding:8px 8px calc(8px + env(safe-area-inset-bottom, 0px))}
+      .footerbar{gap:6px}
+      .footerbar button{padding:10px 8px}
+    }
+
+    @media (max-width:480px){
+      section{padding-top:6px}
+      .item{border-top:1px solid rgba(255,255,255,0.05);padding-top:12px;margin-top:8px}
+      .item:first-child{border-top:none;margin-top:0;padding-top:8px}
+      .title .meta .chip{background:rgba(255,255,255,0.05)}
+    }
+
+    @media(min-width:720px){
+      .item{grid-template-columns:1fr auto auto}
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <h1>Kitchen Master Inventory</h1>
+      <div class="toolbar">
+        <!-- Frequency pills: select-to-include. None selected => show all -->
+        <span class="pill btn" id="freq-weekly">🟢 Weekly (0)</span>
+        <span class="pill btn" id="freq-biweekly">🟡 Biweekly (0)</span>
+        <span class="pill btn" id="freq-monthly">🔵 Monthly (0)</span>
+        <span class="pill btn" id="freq-quarterly">⚪ Quarterly (0)</span>
+        <span class="pill btn" id="freq-showall" title="Clear selection (show all)">↺ Show All</span>
+
+        <span class="pill">📍 Carol Stream, IL</span>
+      </div>
+    </div>
+  </header>
+
+  <main class="wrap" id="app"></main>
+  <div class="bottom-spacer" aria-hidden="true"></div>
+
+  <footer>
+    <div class="footerbar">
+      <button id="actionCollapseToggle" title="Show only Buy>0; auto-collapse section when they’re all Done">🧩 Action Collapse (0)</button>
+      <button id="copyList">Copy Grocery List</button>
+      <button id="resetAll">Reset All</button>
+    </div>
+  </footer>
+
+<script>
+// ===== Data =====
+const data = [
+  { id:"proteins", title:"Proteins", items:[
+    {name:"Chicken or main prep protein", freq:"weekly", keep:"8–10 lb", trigger:"<3 lb", cost:"$2.50/lb", zone:"Fridge / Freezer", notes:"Prep Set A, freeze Set B"},
+    {name:"Ground or stir-fry meat", freq:"weekly", keep:"4–5 lb", trigger:"<2 lb", cost:"$4.50/lb", zone:"Freezer", notes:"Chili/tacos/bowls"},
+    {name:"Eggs", freq:"weekly", keep:"2 dozen", trigger:"<6 left", cost:"$2.50/doz", zone:"Fridge top", notes:"Core breakfast + prep"},
+    {name:"Dairy protein (yogurt or cottage cheese)", freq:"weekly", keep:"1 tub each", trigger:"<1/2 tub", cost:"$5 ea", zone:"Fridge top", notes:"Rotate flavors"},
+    {name:"Deli meat or sandwich protein", freq:"biweekly", keep:"1 pack", trigger:"empty", cost:"$5", zone:"Fridge deli", notes:"Rotate turkey/ham/RB"},
+    {name:"Canned/pouch protein (tuna/salmon/chicken)", freq:"biweekly", keep:"6", trigger:"<2", cost:"$1.25 ea", zone:"Pantry", notes:"Shelf-stable backup"},
+    {name:"Frozen quick protein (nuggets/strips/patties)", freq:"biweekly", keep:"1 bag", trigger:"empty", cost:"$9", zone:"Freezer", notes:"Emergency flex dinner"},
+    {name:"Protein powder (any type)", freq:"quarterly", keep:"1 tub", trigger:"<25%", cost:"$45", zone:"Pantry top", notes:"Whey/plant/blend"}
+  ]},
+  { id:"carbs", title:"Carbs & Bases", items:[
+    {name:"Bread or tortillas", freq:"weekly", keep:"2 packs", trigger:"<1 pack", cost:"$4", zone:"Pantry/Fridge", notes:"Keep 1 frozen"},
+    {name:"Rice (bulk)", freq:"biweekly", keep:"10 lb", trigger:"<3 lb", cost:"$8", zone:"Pantry bottom", notes:"Airtight bin"},
+    {name:"Potatoes / sweet potatoes", freq:"biweekly", keep:"5 lb", trigger:"<2 lb", cost:"$4", zone:"Pantry floor", notes:"Cool & ventilated"},
+    {name:"Pasta (assorted)", freq:"monthly", keep:"4 boxes", trigger:"<2 boxes", cost:"$6", zone:"Pantry shelf", notes:"FIFO"},
+    {name:"Oats", freq:"monthly", keep:"2 lb", trigger:"<1 lb", cost:"$3", zone:"Pantry jar", notes:"For shakes & breakfast"},
+    {name:"Crackers / rice cakes", freq:"monthly", keep:"1 box", trigger:"empty", cost:"$4", zone:"Pantry door", notes:"Reseal tightly"}
+  ]},
+  { id:"produce", title:"Fruits & Vegetables", items:[
+    {name:"Leafy greens (lettuce/spinach/mix)", freq:"weekly", keep:"1 clamshell", trigger:"wilted", cost:"$3", zone:"Fridge crisper", notes:"Replace weekly"},
+    {name:"Base veggies (onions/peppers/carrots)", freq:"weekly", keep:"3–5 total", trigger:"<1 each", cost:"$5", zone:"Veg drawer", notes:"Chop on Sunday"},
+    {name:"Broccoli (or carrots) bulk", freq:"weekly", keep:"2–3 lb", trigger:"<1 lb", cost:"$5", zone:"Veg drawer/freezer", notes:"Rotate FIFO"},
+    {name:"Fresh fruit (apples/oranges/bananas)", freq:"biweekly", keep:"6–8 pieces", trigger:"<2", cost:"$6", zone:"Counter/fruit drawer", notes:"Rotate seasonally"},
+    {name:"Citrus for hydration (lemons/limes)", freq:"biweekly", keep:"2–3 each", trigger:"<1 each", cost:"$3", zone:"Hydration Box", notes:"Refresh every 4 days"},
+    {name:"Frozen vegetables (mixed/stir-fry)", freq:"monthly", keep:"4 bags", trigger:"<1 bag", cost:"$10", zone:"Freezer", notes:"Zero waste backup"},
+    {name:"Frozen fruit (berries/mango)", freq:"monthly", keep:"3 bags", trigger:"<1 bag", cost:"$12", zone:"Freezer", notes:"Shakes or oats"},
+    {name:"Canned veg/beans", freq:"quarterly", keep:"4 cans", trigger:"<2 cans", cost:"$6", zone:"Pantry", notes:"Backups"}
+  ]},
+  { id:"pantry", title:"Pantry, Oils & Condiments", items:[
+    {name:"Cooking oils (olive/veg/spray)", freq:"monthly", keep:"2 bottles", trigger:"<1/4 bottle", cost:"$10", zone:"Pantry", notes:"Core oil"},
+    {name:"Condiments/sauces (BBQ/soy/mustard/mayo)", freq:"monthly", keep:"3–4 total", trigger:"empty", cost:"$15", zone:"Fridge door", notes:"Rotate opens first"},
+    {name:"Sweeteners (honey/syrup/sugar)", freq:"monthly", keep:"2 items", trigger:"empty", cost:"$10", zone:"Pantry", notes:"Shakes & recipes"},
+    {name:"Spreads (peanut butter/jam)", freq:"monthly", keep:"2 jars", trigger:"<1/4 jar", cost:"$8", zone:"Pantry", notes:"Keep backup sealed"},
+    {name:"Shelf carbs (rice/pasta/oats)", freq:"monthly", keep:"bulk stock", trigger:"low", cost:"$15", zone:"Pantry bottom", notes:"FIFO"},
+    {name:"Spice refills (salt/garlic/etc.)", freq:"quarterly", keep:"full set", trigger:"empty/clumped", cost:"$15", zone:"Spice rack", notes:"Top off at reset"},
+    {name:"Foil/wrap/freezer bags", freq:"quarterly", keep:"1 box each", trigger:"empty", cost:"$12", zone:"Pantry bottom", notes:"Meal prep support"}
+  ]},
+  { id:"dairy", title:"Dairy & Refrigerated", items:[
+    {name:"Milk or oat milk", freq:"weekly", keep:"1/2 gal", trigger:"<1/3 left", cost:"$4", zone:"Fridge door", notes:"Shakes + breakfast"},
+    {name:"Cheese (slices/shred/block)", freq:"weekly", keep:"2 packs", trigger:"<1/2 pack", cost:"$5", zone:"Fridge drawer", notes:"Keep 1 sealed"},
+    {name:"Dairy protein (yogurt/cottage)", freq:"weekly", keep:"1 tub each", trigger:"<1/2 tub", cost:"$5 ea", zone:"Fridge top", notes:"Rotate weekly"},
+    {name:"Butter or spread", freq:"biweekly", keep:"1 tub + backup", trigger:"<1/4 tub", cost:"$4", zone:"Fridge door", notes:"Backup frozen"},
+    {name:"Cream cheese or sour cream", freq:"biweekly", keep:"1 each", trigger:"empty", cost:"$5", zone:"Fridge", notes:"Wraps & cooking"}
+  ]},
+  { id:"snacks", title:"Snacks, Drinks & Treats", items:[
+    {name:"Snack packs (chips/veggie chips/popcorn)", freq:"weekly", keep:"2–3 bags", trigger:"<1 bag", cost:"$7", zone:"Pantry", notes:"Rotate types"},
+    {name:"Sweet snacks (cookies/brownies/bars)", freq:"weekly", keep:"1–2 packs", trigger:"empty", cost:"$6", zone:"Pantry", notes:"Seal with clip"},
+    {name:"Health snacks (protein bars/trail mix/nuts)", freq:"weekly", keep:"1 box/bag", trigger:"<1/2 left", cost:"$15", zone:"Pantry", notes:"Great for lunch"},
+    {name:"Granola (topping)", freq:"weekly", keep:"1 bag", trigger:"empty", cost:"$6", zone:"Pantry", notes:"Yogurt/shakes"},
+    {name:"Crunchy snacks (pretzels/crackers/rice cakes)", freq:"biweekly", keep:"1–2 items", trigger:"empty", cost:"$6", zone:"Pantry", notes:"Rotate flavors"},
+    {name:"Dips/spreads (hummus/salsa/queso)", freq:"biweekly", keep:"1–2", trigger:"open >2wk", cost:"$8", zone:"Fridge", notes:"Replace regularly"},
+    {name:"Beverages (soda/sparkling/juice/Gatorade)", freq:"weekly", keep:"6–12 cans/2 btls", trigger:"<2 left", cost:"$10", zone:"Fridge", notes:"Swap brands as desired"},
+    {name:"Caffeine (coffee/tea/energy cans)", freq:"biweekly", keep:"2 weeks supply", trigger:"low", cost:"$12", zone:"Pantry/Fridge", notes:"Refill Sunday"},
+    {name:"Hydration/flavor packets", freq:"monthly", keep:"1 bag", trigger:"<1/4 left", cost:"$5", zone:"Pantry", notes:"Keep with shaker"}
+  ]},
+  { id:"cleaning", title:"Cleaning & Supplies", items:[
+    {name:"Dish soap / sponges / gloves", freq:"monthly", keep:"2 of each", trigger:"any empty", cost:"$10", zone:"Under sink", notes:"Replace at reset"},
+    {name:"Bleach / all-purpose cleaner", freq:"monthly", keep:"1 each", trigger:"<1/4 bottle", cost:"$6", zone:"Under sink", notes:"Ventilate"},
+    {name:"Trash bags / paper towels", freq:"monthly", keep:"1 box each", trigger:"half empty", cost:"$10", zone:"Utility", notes:"Check weekly"},
+    {name:"Label tape + marker", freq:"quarterly", keep:"1 set", trigger:"marker dry", cost:"$5", zone:"Drawer", notes:"For Set A/B/C"}
+  ]}
+];
+
+// ===== State & Keys =====
+const app = document.getElementById('app');
+const freqOrder = {weekly:1, biweekly:2, monthly:3, quarterly:4};
+const KEY  = 'kitchen_master_inventory_v1';
+const UIKEY = 'kitchen_master_inventory_ui_v7'; // v7: Need removed; AC=Buy>0, no disappearing
+
+function loadAll(){ try{ return JSON.parse(localStorage.getItem(KEY))||{} }catch{ return {} } }
+function saveAll(state){ localStorage.setItem(KEY, JSON.stringify(state)); }
+function loadState(id){ const s = loadAll(); return s[id]||{} }
+function saveState(id, value){ const s = loadAll(); s[id]=value; saveAll(s); updateAllBadges(); }
+function loadUI(){
+  try{
+    const d = JSON.parse(localStorage.getItem(UIKEY))||{};
+    return {
+      collapsed: d.collapsed||{},
+      actionCollapse: !!d.actionCollapse,
+      freqSelected: Object.assign({weekly:false,biweekly:false,monthly:false,quarterly:false}, d.freqSelected||{})
+    };
+  }catch{
+    return {collapsed:{},actionCollapse:false,freqSelected:{weekly:false,biweekly:false,monthly:false,quarterly:false}};
+  }
+}
+function saveUI(u){ localStorage.setItem(UIKEY, JSON.stringify(u)); }
+
+// ===== Helpers =====
+function getHeaderOffset(){
+  const v = getComputedStyle(document.documentElement).getPropertyValue('--header-h').trim();
+  const n = parseInt(v.replace('px','').trim(),10);
+  return isNaN(n)? 110 : n;
+}
+function smoothScrollSectionTop(secEl){
+  const top = secEl.getBoundingClientRect().top + window.scrollY - getHeaderOffset() - 6;
+  window.scrollTo({top, behavior:'smooth'});
+}
+function ensureAboveFooter(el){
+  const footer = document.querySelector('footer');
+  const fh = footer?.getBoundingClientRect().height || 0;
+  const safe = fh + 12;
+  const r = el.getBoundingClientRect();
+  const overlap = r.bottom - (window.innerHeight - safe);
+  if(overlap > 0){
+    window.scrollBy({top: overlap, left:0, behavior:'smooth'});
+  }
+}
+
+// "All done" helpers
+function sectionAllDone(sectionId){
+  const s = loadAll();
+  const sec = data.find(d=>d.id===sectionId);
+  if(!sec) return false;
+  const buckets = {weekly:[],biweekly:[],monthly:[],quarterly:[]};
+  sec.items.forEach(i=>buckets[i.freq].push(i));
+  for(const f of ['weekly','biweekly','monthly','quarterly']){
+    for(let idx=0; idx<buckets[f].length; idx++){
+      const key = `${sectionId}-${f}-${idx}`;
+      if(!s[key]?.done) return false;
+    }
+  }
+  return true;
+}
+// Are all actionables (Buy>0) now done in this section?
+function sectionActionablesCleared(sectionId){
+  const s = loadAll();
+  const sec = data.find(d=>d.id===sectionId);
+  if(!sec) return true;
+  const buckets = {weekly:[],biweekly:[],monthly:[],quarterly:[]};
+  sec.items.forEach(i=>buckets[i.freq].push(i));
+  let actionable = 0, remaining = 0;
+  for(const f of ['weekly','biweekly','monthly','quarterly']){
+    const list = buckets[f];
+    for(let idx=0; idx<list.length; idx++){
+      const key = `${sectionId}-${f}-${idx}`;
+      const v = s[key]||{};
+      const buyVal = parseFloat(v.buy||'0');
+      const isAction = (!isNaN(buyVal) && buyVal>0);
+      if(isAction){ actionable++; if(!v.done) remaining++; }
+    }
+  }
+  return actionable === 0 || remaining === 0;
+}
+function applySectionDoneStyles(){
+  const ui = loadUI();
+  document.querySelectorAll('section').forEach(sec=>{
+    const id = sec.dataset.sectionId;
+    const green = ui.actionCollapse ? sectionActionablesCleared(id) : sectionAllDone(id);
+    sec.classList.toggle('section-all-done', green);
+  });
+}
+function checkAndAutoCollapse(sectionId, {prevAll, prevCleared} = {}){
+  const ui = loadUI();
+  const nowAll = sectionAllDone(sectionId);
+  const nowCleared = sectionActionablesCleared(sectionId);
+  const secEl = document.querySelector(`section[data-section-id="${sectionId}"]`);
+  if(!secEl) return;
+
+  // Green rule:
+  // - In normal mode: only when 100% of all items are done
+  // - In Action Collapse: turn green when all Buy>0 are done
+  secEl.classList.toggle('section-all-done', ui.actionCollapse ? nowCleared : nowAll);
+
+  // Collapse trigger
+  const shouldCollapse = ui.actionCollapse
+    ? (!prevCleared && nowCleared)   // in AC: collapse when last Buy>0 is done
+    : (!prevAll && nowAll);          // normal: collapse on full completion
+
+  if(shouldCollapse){
+    const u = loadUI();
+    if(!u.collapsed[sectionId]){
+      u.collapsed[sectionId] = true;
+      saveUI(u);
+      secEl.classList.add('collapsed');
+      showToast(`“${secEl.querySelector('h2')?.textContent||'Section'}” ${ui.actionCollapse?'shopping cleared':'complete'} ✅`);
+      smoothScrollSectionTop(secEl);
+    }
+  }
+
+  if(prevAll && !nowAll && !ui.actionCollapse){
+    showToast(`“${secEl.querySelector('h2')?.textContent||'Section'}” no longer fully complete 🔓`);
+  }
+}
+
+// ===== Rendering =====
+const appEl = document.getElementById('app');
+function render(){
+  const ui = loadUI();
+  appEl.innerHTML = '';
+
+  data.forEach(section => {
+    const items = [...section.items].sort((a,b)=>freqOrder[a.freq]-freqOrder[b.freq]);
+    const sec = document.createElement('section');
+    sec.dataset.sectionId = section.id;
+    sec.innerHTML = `<header><h2>${section.title}</h2></header>`;
+
+    if((ui.actionCollapse ? sectionActionablesCleared(section.id) : sectionAllDone(section.id))) {
+      sec.classList.add('section-all-done');
+    }
+    if(ui.collapsed[section.id]) sec.classList.add('collapsed');
+
+    const buckets = {weekly:[], biweekly:[], monthly:[], quarterly:[]};
+    items.forEach(i=>buckets[i.freq].push(i));
+
+    const groupWrap = document.createElement('div');
+    groupWrap.className = 'group';
+
+    Object.entries(buckets).forEach(([freq,list])=>{
+      if(!list.length) return;
+
+      const block = document.createElement('div');
+      block.className = 'freqBlock';
+      block.dataset.freq = freq;
+
+      const label = document.createElement('div');
+      label.className = `freq f-${freq}`;
+      label.innerHTML = `<span class="dot"></span>${freqLabel(freq)}`;
+      block.appendChild(label);
+
+      list.forEach((item, idx)=>{
+        const row = document.createElement('div');
+        row.className = 'item';
+        row.dataset.freq = freq;
+        const id = `${section.id}-${freq}-${idx}`;
+        const saved = loadState(id);
+
+        row.innerHTML = `
+          <div class="title">
+            <div class="name">${item.name}</div>
+            <div class="meta">
+              <span class="chip">Keep: ${item.keep}</span>
+              <span class="chip">Trigger: ${item.trigger}</span>
+              <span class="chip">Avg: ${item.cost}</span>
+              <span class="chip">Zone: ${item.zone}</span>
+              ${item.notes?`<span class="chip">${item.notes}</span>`:''}
+              <span class="chip buychip" style="display:${saved.buy && Number(saved.buy)>0?'inline-flex':'none'}">Buy: ${saved.buy||''}</span>
+            </div>
+          </div>
+          <div class="controls">
+            <label>Have <input type="number" step="any" min="0" value="${saved.have??''}"/></label>
+            <label>Buy <input type="number" step="any" min="0" value="${saved.buy??''}"/></label>
+            <label class="done"><input type="checkbox" ${saved.done? 'checked':''}/> Done</label>
+          </div>
+        `;
+
+        const [haveEl, buyEl, doneEl] = row.querySelectorAll('.controls input');
+        const buyChip = row.querySelector('.buychip');
+        row.classList.toggle('is-done', !!saved.done);
+
+        function persist(){
+          const prevAll = sectionAllDone(section.id);
+          const prevCleared = sectionActionablesCleared(section.id);
+
+          const v = { have: haveEl.value, buy: buyEl.value, done: doneEl.checked };
+
+          // buy chip live
+          const val = parseFloat(v.buy||'0');
+          if(!isNaN(val) && val>0){ buyChip.textContent = `Buy: ${v.buy}`; buyChip.style.display = 'inline-flex'; }
+          else { buyChip.style.display = 'none'; }
+
+          saveState(id, v);
+          applyFilterToRow(row, v);
+          updateAllBadges();
+          checkAndAutoCollapse(section.id, {prevAll, prevCleared});
+          if(loadUI().actionCollapse) hideEmptySections();
+        }
+
+        haveEl.addEventListener('input', persist);
+        buyEl .addEventListener('input', persist);
+        doneEl.addEventListener('change', ()=>{ row.classList.toggle('is-done', doneEl.checked); persist(); ensureAboveFooter(doneEl); });
+
+        [haveEl, buyEl].forEach(inp=>inp.addEventListener('focus', ()=>ensureAboveFooter(inp)));
+
+        // initial
+        applyFilterToRow(row, saved);
+        block.appendChild(row);
+      });
+
+      groupWrap.appendChild(block);
+    });
+
+    sec.appendChild(groupWrap);
+
+    // Manual collapse toggle
+    sec.querySelector('header').addEventListener('click', ()=>{
+      const u = loadUI();
+      sec.classList.toggle('collapsed');
+      const isCollapsed = sec.classList.contains('collapsed');
+      u.collapsed[section.id] = isCollapsed;
+      saveUI(u);
+    });
+
+    // Auto-collapse on load if complete per current mode
+    const complete = loadUI().actionCollapse ? sectionActionablesCleared(section.id) : sectionAllDone(section.id);
+    if(complete && !ui.collapsed[section.id]){
+      const u2 = loadUI();
+      u2.collapsed[section.id] = true;
+      saveUI(u2);
+      sec.classList.add('collapsed');
+    }
+
+    appEl.appendChild(sec);
+  });
+
+  setFreqPillStates();
+  updateAllBadges();
+  applySectionDoneStyles();
+  hideEmptySections();
+}
+
+// ===== Labels =====
+function freqLabel(f){
+  return f==='weekly'?'🟢 Weekly'
+       :f==='biweekly'?'🟡 Biweekly'
+       :f==='monthly'?'🔵 Monthly'
+       :'⚪ Quarterly';
+}
+
+// ===== Filtering =====
+// Frequency selection: none selected => show all
+function rowMatchesFreq(row){
+  const ui = loadUI();
+  const sel = ui.freqSelected;
+  const selectedList = Object.keys(sel).filter(k=>sel[k]);
+  if(selectedList.length===0) return true;
+  return !!sel[row.dataset.freq];
+}
+// Action Collapse: show only Buy>0 (keep visible even if Done)
+function rowMatchesAction(v){
+  const ui = loadUI();
+  if(!ui.actionCollapse) return true;
+  const buyVal = parseFloat(v.buy||'0');
+  return (!isNaN(buyVal) && buyVal>0);
+}
+function applyFilter(){
+  document.querySelectorAll('.item').forEach(row=>{
+    const [haveEl, buyEl, doneEl] = row.querySelectorAll('.controls input');
+    const v = { have: haveEl.value||'', buy: buyEl.value||'', done: !!doneEl.checked };
+    applyFilterToRow(row, v);
+  });
+  document.querySelectorAll('.freqBlock').forEach(block=>{
+    const anyVisible = Array.from(block.querySelectorAll('.item')).some(r=>!r.classList.contains('hidden-by-filter'));
+    block.style.display = anyVisible ? '' : 'none';
+  });
+  hideEmptySections();
+  updateAllBadges();
+}
+function applyFilterToRow(row, v){
+  const show = rowMatchesFreq(row) && rowMatchesAction(v);
+  if(show) row.classList.remove('hidden-by-filter');
+  else row.classList.add('hidden-by-filter');
+}
+// Hide entire section when AC is ON and it has no visible rows (not collapsed-out)
+function hideEmptySections(){
+  const ui = loadUI();
+  document.querySelectorAll('section').forEach(sec=>{
+    if(!ui.actionCollapse){ sec.style.display=''; return; }
+    const anyVisible = Array.from(sec.querySelectorAll('.item')).some(r=>!r.classList.contains('hidden-by-filter'));
+    sec.style.display = anyVisible ? '' : 'none';
+  });
+}
+
+// ===== Badges & Pills =====
+function actionableCountBuyOnly(){ // count items with Buy>0 AND not done
+  const s = loadAll();
+  let c = 0;
+  for(const k in s){
+    const v = s[k]||{};
+    const buyVal = parseFloat(v.buy||'0');
+    if((!isNaN(buyVal) && buyVal>0) && !v.done) c++;
+  }
+  return c;
+}
+function getCountsByFreq(){ // counts Buy>0 AND not done by freq
+  const s = loadAll();
+  const counts = {weekly:0, biweekly:0, monthly:0, quarterly:0};
+  for(const k in s){
+    const v = s[k]||{};
+    const parts = k.split('-');
+    const f = parts[1];
+    if(!counts.hasOwnProperty(f)) continue;
+    const buyVal = parseFloat(v.buy||'0');
+    if((!isNaN(buyVal) && buyVal>0) && !v.done) counts[f]++;
+  }
+  return counts;
+}
+function updateAllBadges(){
+  // Action Collapse button badge (not-done only)
+  const btn = document.getElementById('actionCollapseToggle');
+  const n = actionableCountBuyOnly();
+  const ui = loadUI();
+  btn.textContent = `🧩 Action Collapse (${n})`;
+  btn.classList.toggle('active', !!ui.actionCollapse);
+
+  // Frequency counts (not-done only)
+  const per = getCountsByFreq();
+  document.getElementById('freq-weekly').textContent   = `🟢 Weekly (${per.weekly})`;
+  document.getElementById('freq-biweekly').textContent = `🟡 Biweekly (${per.biweekly})`;
+  document.getElementById('freq-monthly').textContent  = `🔵 Monthly (${per.monthly})`;
+  document.getElementById('freq-quarterly').textContent= `⚪ Quarterly (${per.quarterly})`;
+
+  setFreqPillStates();
+}
+function setFreqPillStates(){
+  const ui = loadUI();
+  const map = {
+    weekly:   document.getElementById('freq-weekly'),
+    biweekly: document.getElementById('freq-biweekly'),
+    monthly:  document.getElementById('freq-monthly'),
+    quarterly:document.getElementById('freq-quarterly'),
+  };
+  for(const f in map){
+    map[f].classList.toggle('active', !!ui.freqSelected[f]);
+  }
+}
+
+// ===== Footer Actions =====
+function resetAll(){ localStorage.removeItem(KEY); render(); applyFilter(); }
+
+// Copy list: only Buy>0 (keeps Done items listed so you see your full plan)
+function copyList(){
+  const sections = Array.from(document.querySelectorAll('section'));
+  const lines = [];
+  sections.forEach(sec=>{
+    if(sec.style.display==='none') return;
+    const sectionTitle = sec.querySelector('h2')?.textContent?.trim();
+    const items = Array.from(sec.querySelectorAll('.item'));
+    const sectionLines = [];
+    items.forEach((row, idx)=>{
+      if(row.classList.contains('hidden-by-filter')) return;
+      const name = row.querySelector('.title .name')?.textContent?.trim() || `Item ${idx+1}`;
+      const [haveEl, buyEl, doneEl] = row.querySelectorAll('.controls input');
+      const buyVal = parseFloat(buyEl?.value || '0');
+      if(!isNaN(buyVal) && buyVal>0){
+        const haveTxt = (haveEl?.value ?? '').toString().trim();
+        const buyTxt  = (buyEl?.value ?? '').toString().trim();
+        const parts = [name];
+        if(buyTxt) parts.push(`Buy: ${buyTxt}`);
+        if(haveTxt) parts.push(`Have: ${haveTxt}`);
+        if(doneEl?.checked) parts.push(`Done`);
+        sectionLines.push(`• ${parts.join(' — ')}`);
+      }
+    });
+    if(sectionLines.length){
+      lines.push(sectionTitle);
+      lines.push(...sectionLines);
+      lines.push('');
+    }
+  });
+  const text = lines.join('\n').trim() || 'Nothing with Buy > 0.';
+  if(navigator.clipboard?.writeText){
+    navigator.clipboard.writeText(text).then(()=>showToast('Grocery list copied ✅')).catch(()=>alert(text));
+  }else alert(text);
+}
+
+// Tiny toast
+function showToast(msg){
+  let el = document.getElementById('toast');
+  if(!el){
+    el = document.createElement('div');
+    el.id = 'toast';
+    Object.assign(el.style, {
+      position:'fixed',left:'50%',bottom:'96px',transform:'translateX(-50%)',
+      background:'rgba(21,24,33,0.95)',color:'#e6e9ef',border:'1px solid #232733',
+      padding:'10px 12px',borderRadius:'10px',zIndex:'2000',fontSize:'13px',transition:'opacity .2s ease'
+    });
+    document.body.appendChild(el);
+  }
+  el.textContent = msg;
+  el.style.opacity = '1';
+  clearTimeout(el._t);
+  el._t = setTimeout(()=>{ el.style.opacity = '0'; }, 1500);
+}
+
+// ===== Wire UI =====
+document.getElementById('copyList').addEventListener('click', copyList);
+document.getElementById('resetAll').addEventListener('click', resetAll);
+
+// Action Collapse toggle (footer)
+document.getElementById('actionCollapseToggle').addEventListener('click', ()=>{
+  const u = loadUI();
+  u.actionCollapse = !u.actionCollapse;
+  saveUI(u);
+  applyFilter();  // immediately apply show/hide
+  updateAllBadges();
+  applySectionDoneStyles();
+  showToast(u.actionCollapse ? 'Action Collapse: ON' : 'Action Collapse: OFF');
+});
+
+// Frequency selection (select-to-include). None selected => show all.
+const freqBtns = {
+  weekly:    document.getElementById('freq-weekly'),
+  biweekly:  document.getElementById('freq-biweekly'),
+  monthly:   document.getElementById('freq-monthly'),
+  quarterly: document.getElementById('freq-quarterly'),
+};
+Object.entries(freqBtns).forEach(([f,el])=>{
+  el.addEventListener('click', ()=>{
+    const u = loadUI();
+    u.freqSelected[f] = !u.freqSelected[f];
+    saveUI(u);
+    setFreqPillStates();
+    applyFilter();
+  });
+});
+
+// Show All = clear selections (none selected)
+document.getElementById('freq-showall').addEventListener('click', ()=>{
+  const u = loadUI();
+  u.freqSelected = {weekly:false,biweekly:false,monthly:false,quarterly:false};
+  saveUI(u);
+  setFreqPillStates();
+  applyFilter();
+  showToast('Showing all frequencies');
+});
+
+// Initial render
+render();
+applyFilter();
+</script>
+</body>
+</html>
